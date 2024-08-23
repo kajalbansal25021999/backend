@@ -1,12 +1,12 @@
 import "dotenv/config";
 import express from "express";
 import mongoose from "mongoose";
-
 import cors from "cors";
 import bcrypt from "bcrypt";
 import session from "express-session";
 import MongoStore from "connect-mongo";
 import UserModel from "./model/User.js";
+import CartModel from "./model/Cart.js";
 
 const app = express();
 
@@ -94,5 +94,51 @@ app.get("/api/user", (req, res) => {
     res.json({ user: req.session.user });
   } else {
     res.status(401).json("Not authenticated");
+  }
+});
+
+app.post("/api/cart", async (req, res) => {
+  try {
+    const { productId, title, price, image } = req.body;
+    const userId = req.session.user.id;
+
+    let cart = await CartModel.findOne({ userId });
+
+    if (!cart) {
+      cart = new CartModel({ userId, items: [] });
+    }
+
+    const itemIndex = cart.items.findIndex(
+      (item) => item.productId === productId
+    );
+
+    if (itemIndex > -1) {
+      cart.items[itemIndex].quantity += 1;
+    } else {
+      cart.items.push({ productId, title, price, image, quantity: 1 });
+    }
+
+    await cart.save();
+
+    const cartCount = cart.items.reduce((acc, item) => acc + item.quantity, 0);
+    res.json({ cartCount });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/api/cart", async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const cart = await CartModel.findOne({ userId });
+
+    if (!cart) {
+      return res.status(200).json({ items: [], cartCount: 0 });
+    }
+
+    const cartCount = cart.items.reduce((acc, item) => acc + item.quantity, 0);
+    res.json({ items: cart.items, cartCount });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
